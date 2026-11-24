@@ -1,13 +1,59 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
+/* Follow OS dark *only as initial fallback* before ThemeProvider sets data-theme;
+   the [data-theme=...] blocks below are the source of truth. */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
+}
+
+/* BrickCraft theme tokens — light defaults, dark via [data-theme=dark] */
+:root,
+[data-theme="light"] {
+  /* panel a touch darker than buttons so button outlines don't blend into it */
+  --bc-panel: rgba(241, 245, 249, 0.96);
+  --bc-btn: #ffffff;
+  --bc-btn-border: #cbd5e1;
+  --bc-btn-disabled: #e2e8f0;
+  --bc-seg: #e2e8f0;
+  --bc-text: #0f172a;
+  --bc-muted: #475569;
+  --bc-active: #bfdbfe;
+  --bc-active-text: #1e3a8a;
+  --bc-accent: #3b82f6;
+  --bc-danger-bg: #fef2f2;
+  --bc-danger-border: #fca5a5;
+  --bc-danger-text: #b91c1c;
+  --bc-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --bc-canvas-bg: #f1f5f9;
+  --bc-grid-a: 0x475569;
+  --bc-grid-b: 0x94a3b8;
+}
+
+[data-theme="dark"] {
+  /* panel darker than buttons so text stays legible; seg slightly lighter than panel */
+  --bc-panel: rgba(2, 6, 23, 0.94);
+  --bc-btn: #334155;
+  --bc-btn-border: #475569;
+  --bc-btn-disabled: #1e293b;
+  --bc-seg: #1e293b;
+  --bc-text: #f1f5f9;
+  --bc-muted: #94a3b8;
+  --bc-active: #2563eb;
+  --bc-active-text: #f8fafc;
+  --bc-accent: #60a5fa;
+  --bc-danger-bg: #2a1215;
+  --bc-danger-border: #7f1d1d;
+  --bc-danger-text: #f87171;
+  --bc-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --bc-canvas-bg: #0f172a;
+  --bc-grid-a: 0x475569;
+  --bc-grid-b: 0x334155;
 }
 
 html,
@@ -18,8 +64,8 @@ body {
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--bc-text);
+  background: var(--bc-canvas-bg);
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -36,8 +82,10 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+/* color-scheme follows the active theme so native UI (scrollbars) match */
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  color-scheme: light;
 }
