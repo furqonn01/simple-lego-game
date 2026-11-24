@@ -81,10 +81,35 @@ export function useBrickStore() {
   // Keyboard bindings
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (e.key === "r" || e.key === "R") {
-        rotate();
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
         return;
+      }
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod && !e.altKey) {
+        if (e.key === "1") {
+          setToolMode("build");
+          return;
+        }
+        if (e.key === "2") {
+          setToolMode("paint");
+          return;
+        }
+        if (e.key === "3") {
+          setToolMode("erase");
+          return;
+        }
+        if (e.key === "r" || e.key === "R") {
+          rotate();
+          return;
+        }
       }
       if (mod && (e.key === "z" || e.key === "Z")) {
         e.preventDefault();

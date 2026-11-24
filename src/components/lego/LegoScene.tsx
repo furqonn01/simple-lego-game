@@ -14,7 +14,7 @@ import type { PlacedBrick, Rotation, BrickDefinition } from "@/types/lego";
 import {
   DEF_MAP,
   getBrickById,
-} from "@/constants/bricks";import {
+} from "@/constants/bricks"; import {
   computeStackHeight,
   getEffectiveDimensions,
   isValidPlacement,
@@ -22,7 +22,6 @@ import {
 } from "@/utils/grid";
 import { useBrickStore } from "@/hooks/useBrickStore";
 
-const DRAG_THRESHOLD = 5; // px — below this a pointer down/up counts as a click
 
 type Store = ReturnType<typeof useBrickStore>;
 
@@ -87,7 +86,18 @@ function CameraPresetController() {
       apply((e as CustomEvent<CameraPreset>).detail);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "BUTTON" ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.code === "Space" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         apply("reset");
       }
@@ -135,11 +145,12 @@ function Scene({ store, showGrid }: { store: Store; showGrid: boolean }) {
     downPos.current = { x: p.clientX, y: p.clientY };
   };
 
-  const isClick = useCallback((e: ThreeEvent<MouseEvent>): boolean => {
+  const isClick = useCallback((e: ThreeEvent<MouseEvent | PointerEvent>): boolean => {
     const d = downPos.current;
     if (!d) return true;
-    const p = e.nativeEvent as MouseEvent;
-    return Math.hypot(p.clientX - d.x, p.clientY - d.y) < DRAG_THRESHOLD;
+    const p = e.nativeEvent as PointerEvent;
+    const threshold = p.pointerType === "touch" ? 18 : 6;
+    return Math.hypot(p.clientX - d.x, p.clientY - d.y) < threshold;
   }, []);
 
   const stackAt = useCallback(
@@ -213,10 +224,13 @@ function Scene({ store, showGrid }: { store: Store; showGrid: boolean }) {
   const handleBrickMove = useCallback(
     (b: PlacedBrick) => (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation();
-      if (toolMode === "erase" || toolMode === "paint")
+      if (toolMode === "erase" || toolMode === "paint") {
         setHoveredId(b.instanceId);
+      } else if (toolMode === "build") {
+        handleHover(e);
+      }
     },
-    [toolMode]
+    [toolMode, handleHover]
   );
   const handleBrickOut = useCallback(() => setHoveredId(null), []);
 
@@ -238,9 +252,12 @@ function Scene({ store, showGrid }: { store: Store; showGrid: boolean }) {
         if (!isClick(e)) return;
         if (toolMode === "erase" || toolMode === "paint") {
           applyToBrick(brick);
+        } else if (toolMode === "build") {
+          const { gx, gz } = worldToGrid(e.point, activeDef, rotation);
+          applyAt(gx, gz);
         }
       },
-    [isClick, toolMode, applyToBrick]
+    [isClick, toolMode, applyToBrick, activeDef, rotation, applyAt]
   );
 
   const clearGhost = useCallback(() => setGhost(null), []);
@@ -297,6 +314,9 @@ function Scene({ store, showGrid }: { store: Store; showGrid: boolean }) {
         minDistance={5}
         maxDistance={80}
         target={[0, -4, 0]}
+        enableDamping
+        dampingFactor={0.08}
+        rotateSpeed={0.8}
       />
       <CameraPresetController />
     </>
@@ -311,14 +331,26 @@ export default function LegoScene() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "g" || e.key === "G") toggleGrid();
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "g" || e.key === "G")) {
+        toggleGrid();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleGrid]);
 
   return (
-    <div style={{ position: "fixed", inset: 0 }}>
+    <div style={{ position: "fixed", inset: 0, width: "100%", height: "100%", touchAction: "none" }}>
       <Canvas
         shadows
         camera={{ position: [14, 14, 14], fov: 45 }}

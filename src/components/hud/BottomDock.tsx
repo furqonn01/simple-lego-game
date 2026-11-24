@@ -6,7 +6,8 @@ import {
   COLOR_PALETTE,
 } from "@/constants/bricks";
 import type { BrickDefinition } from "@/types/lego";
-import { Hash } from "lucide-react";
+import { Hash, RotateCw } from "lucide-react";
+import styles from "./BottomDock.module.css";
 
 type Store = ReturnType<typeof useBrickStore>;
 
@@ -16,23 +17,81 @@ const CATS = [
   { key: "tile", label: "Tiles" },
 ] as const;
 
-// Small CSS badge that shows the stud footprint (e.g. 2x4) as a grid of squares
+// Clean CSS badge that shows the stud footprint or smooth tile cleanly inside the button
 function DimensionBadge({ def }: { def: BrickDefinition }) {
+  if (def.category === "tile") {
+    // Smooth tile preview (no studs)
+    const w = def.width === 1 ? 6 : 12;
+    const h = def.depth === 2 ? 12 : 7;
+    return (
+      <span
+        style={{
+          width: 14,
+          height: 16,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+        aria-hidden
+      >
+        <span
+          style={{
+            width: w,
+            height: h,
+            borderRadius: 2,
+            border: "1px solid currentColor",
+            background: "currentColor",
+            opacity: 0.45,
+          }}
+        />
+      </span>
+    );
+  }
+
+  // Bricks & plates with studs: scale stud size and gap so height NEVER overflows 16px
+  const maxDim = Math.max(def.width, def.depth);
+  const studSize = maxDim >= 4 ? 2.8 : maxDim === 3 ? 3.4 : 4.2;
+  const gap = maxDim >= 4 ? 1 : 1.2;
+
   const cells: number[] = [];
   for (let i = 0; i < def.width * def.depth; i++) cells.push(i);
+
   return (
     <span
       style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${def.width}, 6px)`,
-        gap: 1,
-        height: 14,
+        width: 14,
+        height: 16,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        overflow: "hidden",
       }}
       aria-hidden
     >
-      {cells.map((i) => (
-        <span key={i} style={{ width: 6, height: 6, background: "currentColor", borderRadius: 1, opacity: 0.5 }} />
-      ))}
+      <span
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${def.width}, ${studSize}px)`,
+          gap: `${gap}px`,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {cells.map((i) => (
+          <span
+            key={i}
+            style={{
+              width: studSize,
+              height: studSize,
+              background: "currentColor",
+              borderRadius: 1,
+              opacity: 0.6,
+            }}
+          />
+        ))}
+      </span>
     </span>
   );
 }
@@ -54,114 +113,81 @@ export function BottomDock({ store }: { store: Store }) {
     [cat]
   );
 
-  const btnBase: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 8px",
-    borderRadius: 6,
-    border: "1px solid var(--bc-btn-border)",
-    background: "var(--bc-btn)",
-    color: "var(--bc-text)",
-    fontSize: 12,
-    cursor: "pointer",
-  };
-
-  const panelStyle: React.CSSProperties = {
-    background: "var(--bc-panel)",
-    border: "1px solid var(--bc-btn-border)",
-    borderRadius: 10,
-    padding: 8,
-    boxShadow: "var(--bc-shadow)",
-    pointerEvents: "auto" as const,
-  };
-
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 12,
-        left: 12,
-        right: 12,
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 12,
-        zIndex: 10,
-        pointerEvents: "none",
-        fontFamily: "Arial, sans-serif",
-        color: "var(--bc-text)",
-      }}
-    >
-      {/* Left: category tabs + brick selector + rotation */}
-      <div style={{ ...panelStyle, maxWidth: "min(480px, 70vw)" }}>
-        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-          {CATS.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setCat(c.key)}
-              style={{
-                ...btnBase,
-                color: cat === c.key ? "var(--bc-active-text)" : "var(--bc-text)",
-                border: cat === c.key ? "2px solid var(--bc-accent)" : "1px solid transparent",
-                background: cat === c.key ? "var(--bc-active)" : "transparent",
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
+    <div className={styles.dockContainer}>
+      {/* Left: category tabs + brick selector + rotation (+ mobile colors) */}
+      <div className={`${styles.panel} ${styles.leftPanel}`}>
+        {/* Category tabs + Rotate button */}
+        <div className={styles.categoryRow}>
+          <div className={styles.categoryTabs}>
+            {CATS.map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setCat(c.key)}
+                className={`${styles.btnBase} ${cat === c.key ? styles.btnActive : ""}`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={rotate}
+            className={styles.btnBase}
+            title="Rotate piece (R)"
+          >
+            <RotateCw size={13} />
+            <span>{rotation}&deg;</span>
+          </button>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, color: "var(--bc-text)" }}>
+
+        {/* Brick pieces (swipeable on mobile, wraps on wide screens) */}
+        <div className={styles.brickList}>
           {filtered.map((b) => {
             const active = b.id === selectedBrickId;
             return (
               <button
                 key={b.id}
                 onClick={() => setSelectedBrickId(b.id)}
-                style={{
-                  ...btnBase,
-                  color: active ? "var(--bc-active-text)" : "var(--bc-text)",
-                  border: active ? "2px solid var(--bc-accent)" : "1px solid var(--bc-btn-border)",
-                  background: active ? "var(--bc-active)" : "var(--bc-btn)",
-                }}
+                className={`${styles.btnBase} ${active ? styles.btnActive : ""}`}
                 title={b.name}
               >
                 <DimensionBadge def={b} />
-                <span style={{ fontWeight: 600, color: "var(--bc-text)" }}>{b.name}</span>
+                <span style={{ fontWeight: 600 }}>{b.name}</span>
               </button>
             );
           })}
-          <button
-            onClick={rotate}
-            style={{ ...btnBase, marginLeft: 4 }}
-            title="Rotate (R)"
-          >
-            Rotate {rotation}&deg;
-          </button>
+        </div>
+
+        {/* Mobile color swatches + brick counter */}
+        <div className={styles.mobileColorRow}>
+          <div className={styles.mobileSwatches}>
+            {COLOR_PALETTE.map((c) => (
+              <button
+                key={c}
+                onClick={() => setSelectedColor(c)}
+                className={`${styles.swatch} ${styles.swatchMobile} ${c === selectedColor ? styles.swatchActive : ""}`}
+                style={{ background: c }}
+                aria-label={`color ${c}`}
+              />
+            ))}
+          </div>
+          <span style={{ fontSize: 12, color: "var(--bc-muted)", display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+            <Hash size={12} />
+            {placed.length}
+          </span>
         </div>
       </div>
 
-      {/* Right: color swatches + brick counter */}
-      <div
-        style={{
-          ...panelStyle,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 160 }}>
+      {/* Right (Desktop only): color swatches + brick counter */}
+      <div className={`${styles.panel} ${styles.rightPanel}`}>
+        <div className={styles.swatchGrid}>
           {COLOR_PALETTE.map((c) => (
             <button
               key={c}
               onClick={() => setSelectedColor(c)}
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                background: c,
-                border: c === selectedColor ? "2px solid var(--bc-text)" : "1px solid var(--bc-btn-border)",
-                cursor: "pointer",
-              }}
+              className={`${styles.swatch} ${c === selectedColor ? styles.swatchActive : ""}`}
+              style={{ background: c }}
               aria-label={`color ${c}`}
             />
           ))}

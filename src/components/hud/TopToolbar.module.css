@@ -1,0 +1,154 @@
+.toolbarContainer {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  z-index: 20;
+  pointer-events: none;
+  font-family: inherit;
+  color: var(--bc-text);
+}
+
+.panel {
+  background: var(--bc-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--bc-panel-border);
+  border-radius: 12px;
+  padding: 6px 8px;
+  box-shadow: var(--bc-shadow);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bc-seg);
+  border-radius: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--bc-btn-border);
+  background: var(--bc-btn);
+  color: var(--bc-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.btnActive {
+  background: var(--bc-active) !important;
+  color: var(--bc-active-text) !important;
+  border-color: var(--bc-accent) !important;
+  font-weight: 600;
+}
+
+.segBtn {
+  border-color: transparent;
+  background: transparent;
+}
+
+.desktopOnly {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.popoverAnchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  background: var(--bc-panel-solid);
+  border: 1px solid var(--bc-panel-border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: var(--bc-shadow);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--bc-text);
+}
+
+.popoverSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popoverTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bc-muted);
+}
+
+.popoverRow {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Mobile responsive (<= 768px) */
+@media (max-width: 768px) {
+  .toolbarContainer {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    gap: 6px;
+  }
+
+  .panel {
+    padding: 4px 6px;
+    gap: 6px;
+  }
+
+  .btn {
+    min-height: 32px;
+    padding: 4px 8px;
+  }
+
+  .desktopOnly {
+    display: none !important;
+  }
+
+  .mobileOnly {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+  }
+}

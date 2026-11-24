@@ -25,6 +25,18 @@ export const COLOR_PALETTE: string[] = [
   "#94a3b8", // gray
 ];
 
+export const COLOR_META: Record<string, { name: string; light?: boolean }> = {
+  "#e11d48": { name: "Red" },
+  "#f59e0b": { name: "Orange", light: true },
+  "#facc15": { name: "Yellow", light: true },
+  "#16a34a": { name: "Green" },
+  "#3b82f6": { name: "Blue" },
+  "#6366f1": { name: "Purple" },
+  "#1e293b": { name: "Black" },
+  "#f8fafc": { name: "White", light: true },
+  "#94a3b8": { name: "Gray" },
+};
+
 export const DEFAULT_COLOR = COLOR_PALETTE[0];
 
 export const BRICKS: BrickDefinition[] = [
