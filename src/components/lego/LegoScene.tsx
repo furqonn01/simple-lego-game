@@ -1,17 +1,20 @@
 "use client";
-import { useCallback, useRef, useState } from "react";
-import { Canvas, type ThreeEvent } from "@react-three/fiber";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Baseplate } from "./Baseplate";
 import { BrickMesh } from "./BrickMesh";
 import { GhostBrick } from "./GhostBrick";
-import { Toolbar } from "@/components/hud/Toolbar";
+import { Table } from "./Table";
+import { TopToolbar } from "@/components/hud/TopToolbar";
+import { BottomDock } from "@/components/hud/BottomDock";
+import { useTheme } from "@/context/ThemeContext";
+import type { CameraPreset } from "@/components/hud/types";
 import type { PlacedBrick, Rotation, BrickDefinition } from "@/types/lego";
 import {
   DEF_MAP,
   getBrickById,
-} from "@/constants/bricks";
-import {
+} from "@/constants/bricks";import {
   computeStackHeight,
   getEffectiveDimensions,
   isValidPlacement,
@@ -23,20 +26,99 @@ const DRAG_THRESHOLD = 5; // px — below this a pointer down/up counts as a cli
 
 type Store = ReturnType<typeof useBrickStore>;
 
-function Scene({ store }: { store: Store }) {
-  const {
-    placed,
-    commit,
-    selectedBrickId,
-    selectedColor,
-    rotation,
-    toolMode,
-  } = store;
+// Subtle Web Audio "click/pop" on successful placement — no external assets
+function usePopSound() {
+  const ctxRef = useRef<AudioContext | null>(null);
+  return useCallback(() => {
+    try {
+      if (!ctxRef.current) ctxRef.current = new AudioContext();
+      const ctx = ctxRef.current;
+      if (ctx.state === "suspended") void ctx.resume();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 440;
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch {
+      /* audio unavailable — ignore */
+    }
+  }, []);
+}
+
+// Consumes camera-preset requests from the HUD via a DOM CustomEvent
+function CameraPresetController() {
+  const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls) as unknown as {
+    target?: { set: (x: number, y: number, z: number) => void };
+    update: () => void;
+  } | null;
+
+  const apply = useCallback(
+    (preset: CameraPreset) => {
+      let pos: [number, number, number] = [14, 14, 14];
+      switch (preset) {
+        case "top":
+          pos = [0, 32, 0.01];
+          break;
+        case "front":
+          pos = [0, 4, 22];
+          break;
+        case "iso":
+        case "reset":
+        default:
+          pos = [14, 14, 14];
+          break;
+      }
+      camera.position.set(...pos);
+      if (controls) {
+        controls.target?.set(0, -4, 0);
+        controls.update();
+      }
+    },
+    [camera, controls]
+  );
+
+  useEffect(() => {
+    const onPreset = (e: Event) => {
+      apply((e as CustomEvent<CameraPreset>).detail);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        apply("reset");
+      }
+    };
+    window.addEventListener("brickcraft:set-camera", onPreset);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("brickcraft:set-camera", onPreset);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [apply]);
+
+  return null;
+}
+
+function GridOverlay() {
+  const { theme } = useTheme();
+  const a = theme === "dark" ? 0x94a3b8 : 0x475569;
+  const b = theme === "dark" ? 0x334155 : 0x94a3b8;
+  return <gridHelper args={[32, 32, a, b]} position={[0, 0.01, 0]} />;
+}
+
+function Scene({ store, showGrid }: { store: Store; showGrid: boolean }) {
+  const { placed, commit, selectedBrickId, selectedColor, rotation, toolMode } =
+    store;
+  const { theme } = useTheme();
 
   const activeDef = getBrickById(selectedBrickId);
   const defs = DEF_MAP;
+  const pop = usePopSound();
 
-  // Ghost preview state
   const [ghost, setGhost] = useState<{
     gx: number;
     gy: number;
@@ -44,7 +126,9 @@ function Scene({ store }: { store: Store }) {
     valid: boolean;
   } | null>(null);
 
-  // Drag detection: record pointer-down position so orbiting never places a brick
+  // Per-brick hover highlight for erase/paint modes
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
   const downPos = useRef<{ x: number; y: number } | null>(null);
   const onPointerDown = (e: ThreeEvent<PointerEvent>) => {
     const p = e.nativeEvent as PointerEvent;
@@ -58,7 +142,6 @@ function Scene({ store }: { store: Store }) {
     return Math.hypot(p.clientX - d.x, p.clientY - d.y) < DRAG_THRESHOLD;
   }, []);
 
-  // Compute the stack target height for a footprint
   const stackAt = useCallback(
     (gx: number, gz: number, def: BrickDefinition, rot: Rotation) => {
       const dims = getEffectiveDimensions(def, rot);
@@ -67,7 +150,6 @@ function Scene({ store }: { store: Store }) {
     [placed, defs]
   );
 
-  // Place a brick at a grid cell
   const applyAt = useCallback(
     (gx: number, gz: number) => {
       const gy = stackAt(gx, gz, activeDef, rotation);
@@ -82,19 +164,22 @@ function Scene({ store }: { store: Store }) {
         color: selectedColor,
       };
       commit([...placed, brick]);
+      pop();
     },
-    [stackAt, activeDef, rotation, placed, defs, commit, selectedColor]
+    [stackAt, activeDef, rotation, placed, defs, commit, selectedColor, pop]
   );
 
-  // Recolor or remove a specific placed brick
   const applyToBrick = useCallback(
     (target: PlacedBrick) => {
       if (toolMode === "erase") {
         commit(placed.filter((b) => b.instanceId !== target.instanceId));
+        setHoveredId(null);
       } else if (toolMode === "paint") {
         commit(
           placed.map((b) =>
-            b.instanceId === target.instanceId ? { ...b, color: selectedColor } : b
+            b.instanceId === target.instanceId
+              ? { ...b, color: selectedColor }
+              : b
           )
         );
       }
@@ -102,7 +187,7 @@ function Scene({ store }: { store: Store }) {
     [toolMode, placed, commit, selectedColor]
   );
 
-  // Hover handler shared by baseplate and bricks — update the ghost preview
+  // Hover: ghost preview only in build mode
   const handleHover = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       if (toolMode !== "build") {
@@ -111,13 +196,30 @@ function Scene({ store }: { store: Store }) {
       }
       const { gx, gz } = worldToGrid(e.point, activeDef, rotation);
       const gy = stackAt(gx, gz, activeDef, rotation);
-      const valid = isValidPlacement(gx, gy, gz, activeDef, rotation, placed, defs);
+      const valid = isValidPlacement(
+        gx,
+        gy,
+        gz,
+        activeDef,
+        rotation,
+        placed,
+        defs
+      );
       setGhost({ gx, gy, gz, valid });
     },
     [toolMode, activeDef, rotation, stackAt, placed, defs]
   );
 
-  // Place on baseplate click (only when it was a real click, not an orbit drag)
+  const handleBrickMove = useCallback(
+    (b: PlacedBrick) => (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      if (toolMode === "erase" || toolMode === "paint")
+        setHoveredId(b.instanceId);
+    },
+    [toolMode]
+  );
+  const handleBrickOut = useCallback(() => setHoveredId(null), []);
+
   const handlePlateClick = useCallback(
     (e: ThreeEvent<MouseEvent>) => {
       e.stopPropagation();
@@ -129,39 +231,41 @@ function Scene({ store }: { store: Store }) {
     [isClick, toolMode, activeDef, rotation, applyAt]
   );
 
-  // Click on an existing brick: erase / paint
   const handleBrickClick = useCallback(
-    (brick: PlacedBrick) => (e: ThreeEvent<MouseEvent>) => {
-      e.stopPropagation();
-      if (!isClick(e)) return;
-      if (toolMode === "erase" || toolMode === "paint") {
-        applyToBrick(brick);
-      }
-    },
+    (brick: PlacedBrick) =>
+      (e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        if (!isClick(e)) return;
+        if (toolMode === "erase" || toolMode === "paint") {
+          applyToBrick(brick);
+        }
+      },
     [isClick, toolMode, applyToBrick]
   );
 
   const clearGhost = useCallback(() => setGhost(null), []);
 
-  const isHoverable = toolMode === "erase" || toolMode === "paint";
-
   return (
     <>
-      <ambientLight intensity={0.6} />
+      <ambientLight intensity={theme === "dark" ? 0.35 : 0.5} />
       <directionalLight
         position={[20, 30, 20]}
-        intensity={1.2}
+        intensity={theme === "dark" ? 1.1 : 1.4}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-bias={-0.0005}
       />
+      <directionalLight position={[-15, 10, -15]} intensity={0.4} />
+
+      <Table />
       <Baseplate
         onPointerDown={onPointerDown}
         onPointerMove={handleHover}
         onPointerOut={clearGhost}
         onClick={handlePlateClick}
       />
+      {showGrid && <GridOverlay />}
       {placed.map((b) => {
         const def = defs.get(b.definitionId)!;
         return (
@@ -169,9 +273,10 @@ function Scene({ store }: { store: Store }) {
             key={b.instanceId}
             brick={b}
             def={def}
-            hovered={isHoverable}
+            hovered={hoveredId === b.instanceId}
             onPointerDown={onPointerDown}
-            onPointerMove={handleHover}
+            onPointerMove={handleBrickMove(b)}
+            onPointerOut={handleBrickOut}
             onClick={handleBrickClick(b)}
           />
         );
@@ -187,13 +292,31 @@ function Scene({ store }: { store: Store }) {
           valid={ghost.valid}
         />
       )}
-      <OrbitControls makeDefault minDistance={5} maxDistance={60} target={[0, 0, 0]} />
+      <OrbitControls
+        makeDefault
+        minDistance={5}
+        maxDistance={80}
+        target={[0, -4, 0]}
+      />
+      <CameraPresetController />
     </>
   );
 }
 
 export default function LegoScene() {
   const store = useBrickStore();
+  const { theme } = useTheme();
+  const [showGrid, setShowGrid] = useState(false);
+  const toggleGrid = useCallback(() => setShowGrid((g) => !g), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "g" || e.key === "G") toggleGrid();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleGrid]);
+
   return (
     <div style={{ position: "fixed", inset: 0 }}>
       <Canvas
@@ -201,10 +324,11 @@ export default function LegoScene() {
         camera={{ position: [14, 14, 14], fov: 45 }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <color attach="background" args={["#f1f5f9"]} />
-        <Scene store={store} />
+        <color attach="background" args={[theme === "dark" ? "#0f172a" : "#f1f5f9"]} />
+        <Scene store={store} showGrid={showGrid} />
       </Canvas>
-      <Toolbar store={store} />
+      <TopToolbar store={store} showGrid={showGrid} toggleGrid={toggleGrid} />
+      <BottomDock store={store} />
     </div>
   );
 }

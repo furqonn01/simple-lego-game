@@ -19,15 +19,17 @@ interface BrickMeshProps {
   hovered?: boolean;
   onPointerDown?: (e: ThreeEvent<PointerEvent>) => void;
   onPointerMove?: (e: ThreeEvent<PointerEvent>) => void;
+  onPointerOut?: () => void;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }
 
 export function BrickMesh({
   brick,
   def,
-  hovered,
+  hovered = false,
   onPointerDown,
   onPointerMove,
+  onPointerOut,
   onClick,
 }: BrickMeshProps) {
   const { effWidth, effDepth } = getEffectiveDimensions(def, brick.rotation);
@@ -44,7 +46,8 @@ export function BrickMesh({
     }
   }
 
-  const emissive = hovered ? "#1d4ed8" : "#000000";
+  const emissive = hovered ? "#3b82f6" : "#000000";
+  const emissiveIntensity = hovered ? 0.6 : 1;
 
   return (
     <group
@@ -52,6 +55,7 @@ export function BrickMesh({
       rotation={[0, (brick.rotation * Math.PI) / 180, 0]}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
+      onPointerOut={onPointerOut}
       onClick={onClick}
     >
       {/* Main body box */}
@@ -62,6 +66,7 @@ export function BrickMesh({
           roughness={PLASTIC_ROUGHNESS}
           metalness={PLASTIC_METALNESS}
           emissive={emissive}
+          emissiveIntensity={emissiveIntensity}
         />
       </mesh>
       {/* Top studs */}
@@ -73,6 +78,7 @@ export function BrickMesh({
             roughness={PLASTIC_ROUGHNESS}
             metalness={PLASTIC_METALNESS}
             emissive={emissive}
+            emissiveIntensity={emissiveIntensity}
           />
         </mesh>
       ))}
